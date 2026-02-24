@@ -130,7 +130,7 @@
   font-family: inherit;
   color: var(--color-text);
   transition: border-color var(--transition-fast), background var(--transition-fast);
-  min-height: 36px;
+  min-height: 44px;
 }
 
 .schedBtn:hover {
@@ -157,8 +157,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   border: none;

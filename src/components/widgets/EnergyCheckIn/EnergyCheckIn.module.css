@@ -92,7 +92,8 @@
   border: none;
   cursor: pointer;
   text-align: center;
-  padding: 8px;
+  padding: 12px;
+  min-height: 44px;
   font-family: inherit;
 }
 

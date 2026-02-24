@@ -1,0 +1,12 @@
+.textXs   { font-size: 12px; line-height: 1.4; }
+.textSm   { font-size: 14px; line-height: 1.5; }
+.textBase { font-size: 16px; line-height: 1.6; }
+.textLg   { font-size: 20px; line-height: 1.4; }
+.textXl   { font-size: 24px; line-height: 1.3; }
+.text2xl  { font-size: 32px; line-height: 1.2; }
+
+.fontMedium   { font-weight: 500; }
+.fontSemibold { font-weight: 600; }
+.fontBold     { font-weight: 700; }
+
+.textMuted { color: var(--color-text-muted); }

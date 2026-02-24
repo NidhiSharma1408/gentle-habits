@@ -1,0 +1,35 @@
+.nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  background: var(--color-surface);
+  border-top: 1.5px solid var(--color-border);
+  height: 64px;
+  z-index: 100;
+}
+
+.link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast);
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.link.active {
+  color: var(--color-primary);
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+}

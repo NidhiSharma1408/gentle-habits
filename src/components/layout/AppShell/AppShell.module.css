@@ -1,0 +1,27 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.main {
+  flex: 1;
+  padding: 16px 16px 88px;
+  overflow-y: auto;
+}
+
+@media (min-width: 768px) {
+  .shell {
+    max-width: 100%;
+  }
+
+  .main {
+    padding: 24px 32px 88px;
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}

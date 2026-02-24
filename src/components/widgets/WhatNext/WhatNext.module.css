@@ -1,0 +1,25 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trigger {
+  align-self: flex-start;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-primary-soft);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.text {
+  font-size: 15px;
+  color: var(--color-text);
+  line-height: 1.5;
+}

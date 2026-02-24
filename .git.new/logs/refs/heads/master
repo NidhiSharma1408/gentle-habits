@@ -1,2 +1,0 @@
-0000000000000000000000000000000000000000 2e6cb8a1677de7b45974638f4c1430ee2ce807fc Dev <dev@gentlehabits.local> 1771932407 +0000	commit (initial): chore: scaffold project, install deps, configure eslint/prettier
-2e6cb8a1677de7b45974638f4c1430ee2ce807fc 7163c872565cb46d1bca405ce86a1b2a09cc50ba Dev <dev@gentlehabits.local> 1771932728 +0000	commit: feat(utils): add habitHelpers and suggestion engine

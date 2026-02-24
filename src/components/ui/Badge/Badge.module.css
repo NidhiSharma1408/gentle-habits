@@ -19,6 +19,6 @@
 }
 
 .survival {
-  background: #fff3cd;
+  background: var(--color-warning-soft, #fff3cd);
   color: var(--color-warning);
 }

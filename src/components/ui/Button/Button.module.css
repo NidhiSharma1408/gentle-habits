@@ -43,11 +43,11 @@
 
 .danger {
   background: transparent;
-  color: #c0392b;
-  border: 1.5px solid #e0b0b0;
+  color: var(--color-danger);
+  border: 1.5px solid var(--color-danger-border);
 }
 .danger:hover {
-  background: #fdecea;
+  background: var(--color-danger-soft);
 }
 
 .sm {

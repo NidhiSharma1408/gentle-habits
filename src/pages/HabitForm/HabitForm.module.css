@@ -169,8 +169,8 @@
 }
 
 .removeBtn:hover {
-  color: #c0392b;
-  background: #fdecea;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
 }
 
 .footer {

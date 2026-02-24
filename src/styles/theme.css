@@ -10,6 +10,10 @@
   --color-text-muted: #8c7b72;
   --color-border: #e5d8cc;
   --color-warning: #d4a84b;
+  --color-warning-soft: #fff3cd;
+  --color-danger: #c0392b;
+  --color-danger-soft: #fdecea;
+  --color-danger-border: #e0b0b0;
 
   --radius-sm: 8px;
   --radius-md: 14px;
@@ -31,4 +35,8 @@
   --color-text-muted: #a08878;
   --color-border: #3d2e25;
   --color-warning: #e2b85a;
+  --color-warning-soft: #3d2d0a;
+  --color-danger: #e05e4e;
+  --color-danger-soft: #3d1018;
+  --color-danger-border: #7a3030;
 }

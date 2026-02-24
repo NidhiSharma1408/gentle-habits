@@ -1,6 +1,7 @@
 {
   "name": "gentle-habits",
   "version": "1.0.0",
+  "description": "A compassionate habit tracker for people with executive dysfunction — one small step at a time.",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",

@@ -26,6 +26,16 @@ Key principles:
 - Data persistence via localStorage, with automatic 30-day pruning
 - Reorder steps with up/down buttons or drag-and-drop
 
+### Voice Coach
+
+A hands-free mode for completing habits — no reading or tapping required:
+
+- **Tap the mic** on any habit detail page to start voice coach mode
+- The app **reads each step aloud** using text-to-speech
+- Say **"done"** when you finish a step — it marks it complete and moves to the next
+- Say **"skip"** to move on, or **"stop"** to pause the coach
+- Works with Web Speech API (Chrome, Edge, Safari) — no extra dependencies
+
 ### AI-Powered Step Generation
 
 Gentle Habits integrates with **Claude (Anthropic)** or **Gemini (Google)** to help you break habits into manageable micro-steps:

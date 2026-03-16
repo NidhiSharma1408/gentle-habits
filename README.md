@@ -32,9 +32,10 @@ A hands-free mode for completing habits — no reading or tapping required:
 
 - **Tap the mic** on any habit detail page to start voice coach mode
 - The app **reads each step aloud** using text-to-speech
-- Say **"done"** when you finish a step — it marks it complete and moves to the next
-- Say **"skip"** to move on, or **"stop"** to pause the coach
-- Works with Web Speech API (Chrome, Edge, Safari) — no extra dependencies
+- **Double clap** when you finish a step — it marks it complete and moves to the next
+- Auto-repeats the current step after 45 seconds of no action
+- Tap the mic again to stop the coach
+- **Fully offline** — uses AudioContext for clap detection + SpeechSynthesis for TTS, no network needed
 
 ### AI-Powered Step Generation
 
@@ -89,7 +90,7 @@ src/
 │   ├── ui/           # Button, Badge, Modal, ProgressBar, Toggle
 │   └── widgets/      # DayLog, EnergyCheckIn, WhatNext
 ├── data/             # prebuiltHabits.js
-├── hooks/            # useHabitProgress, useTheme, useWhatNext, useLocalStorage
+├── hooks/            # useHabitProgress, useTheme, useVoiceCoach, useWhatNext, useLocalStorage
 ├── pages/            # Home, HabitDetail, Habits, HabitForm, Settings
 ├── services/         # aiService.js (unified Claude/Gemini AI step generation)
 ├── store/            # habitsStore, progressStore, settingsStore

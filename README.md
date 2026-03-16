@@ -24,6 +24,7 @@ Key principles:
 - Full custom habit creation and editing
 - "I rested today — that counts too" button
 - Data persistence via localStorage, with automatic 30-day pruning
+- Reorder steps with up/down buttons or drag-and-drop
 
 ### AI-Powered Step Generation
 

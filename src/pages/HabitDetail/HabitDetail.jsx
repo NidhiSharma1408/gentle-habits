@@ -5,7 +5,7 @@ import { ArrowLeft, Edit2, Sparkles } from 'lucide-react';
 import { useHabitProgress } from '../../hooks/useHabitProgress';
 import { useHabitsStore } from '../../store/habitsStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { updateSteps } from '../../services/claudeApi';
+import { updateSteps } from '../../services/aiService';
 import HabitStepList from '../../components/habits/HabitStepList/HabitStepList';
 import ProgressBar from '../../components/ui/ProgressBar/ProgressBar';
 import Toggle from '../../components/ui/Toggle/Toggle';
@@ -30,7 +30,8 @@ export default function HabitDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const energyLevel = useSettingsStore((s) => s.energyLevel);
-  const claudeApiKey = useSettingsStore((s) => s.claudeApiKey);
+  const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const getActiveApiKey = useSettingsStore((s) => s.getActiveApiKey);
   const editHabit = useHabitsStore((s) => s.editHabit);
   const [showAIModal, setShowAIModal] = useState(false);
 
@@ -50,18 +51,20 @@ export default function HabitDetail() {
     return <p className={styles.notFound}>Habit not found.</p>;
   }
 
+  const activeApiKey = getActiveApiKey();
+
   const showAltToggle =
     (energyLevel === 'low' || energyLevel === 'survival') && habit.altSteps?.length > 0;
 
   const affirmation = AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
 
   const handleAIUpdate = async (userContext) => {
-    if (!claudeApiKey) {
-      throw new Error('Please add your Claude API key in Settings first.');
+    if (!activeApiKey) {
+      throw new Error('Please add your API key in Settings first.');
     }
 
     const currentStepTexts = habit.steps.map((s) => s.text);
-    const result = await updateSteps(claudeApiKey, {
+    const result = await updateSteps(activeApiKey, aiProvider, {
       habitName: habit.name,
       currentSteps: currentStepTexts,
       userContext,
@@ -102,7 +105,7 @@ export default function HabitDetail() {
           <ArrowLeft size={20} />
         </button>
         <div className={styles.topActions}>
-          {claudeApiKey && (
+          {activeApiKey && (
             <button
               onClick={() => setShowAIModal(true)}
               className={styles.edit}

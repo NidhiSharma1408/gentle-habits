@@ -12,12 +12,26 @@ const pageVariants = {
   animate: { opacity: 1, y: 0 },
 };
 
+const AI_PROVIDERS = [
+  { value: 'claude', label: 'Claude (Anthropic)' },
+  { value: 'gemini', label: 'Gemini (Google)' },
+];
+
 export default function Settings() {
   const { theme, toggleTheme } = useTheme();
   const setEnergyLevel = useSettingsStore((s) => s.setEnergyLevel);
+  const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const setAiProvider = useSettingsStore((s) => s.setAiProvider);
   const claudeApiKey = useSettingsStore((s) => s.claudeApiKey);
   const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
+  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
+  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const [showKey, setShowKey] = useState(false);
+
+  const activeKey = aiProvider === 'gemini' ? geminiApiKey : claudeApiKey;
+  const setActiveKey = aiProvider === 'gemini' ? setGeminiApiKey : setClaudeApiKey;
+  const keyPlaceholder = aiProvider === 'gemini' ? 'AIza...' : 'sk-ant-...';
+  const providerName = aiProvider === 'gemini' ? 'Google' : 'Anthropic';
 
   const resetAll = () => {
     if (window.confirm('This will clear all habits, progress, and settings. Are you sure?')) {
@@ -66,15 +80,30 @@ export default function Settings() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>AI Steps</h2>
         <p className={styles.desc}>
-          Add your Claude API key to generate habit steps with AI.
+          Choose your AI provider and add an API key to generate habit steps.
         </p>
+
+        <label className={styles.fieldLabel}>Provider</label>
+        <div className={styles.providerRow}>
+          {AI_PROVIDERS.map((p) => (
+            <button
+              key={p.value}
+              className={`${styles.providerBtn} ${aiProvider === p.value ? styles.providerSelected : ''}`}
+              onClick={() => setAiProvider(p.value)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <label className={styles.fieldLabel}>API key</label>
         <div className={styles.apiKeyRow}>
           <input
             className={styles.apiKeyInput}
             type={showKey ? 'text' : 'password'}
-            value={claudeApiKey}
-            onChange={(e) => setClaudeApiKey(e.target.value)}
-            placeholder="sk-ant-..."
+            value={activeKey}
+            onChange={(e) => setActiveKey(e.target.value)}
+            placeholder={keyPlaceholder}
             autoComplete="off"
           />
           <button
@@ -86,7 +115,7 @@ export default function Settings() {
           </button>
         </div>
         <p className={styles.desc}>
-          Your key is stored locally and never sent to any server except Anthropic.
+          Your key is stored locally and never sent to any server except {providerName}.
         </p>
       </section>
 

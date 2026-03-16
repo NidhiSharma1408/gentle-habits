@@ -9,7 +9,9 @@ export const useSettingsStore = create(
       theme: 'light',
       energyLevel: null,
       lastEnergyCheckIn: null,
+      aiProvider: 'claude', // 'claude' | 'gemini'
       claudeApiKey: '',
+      geminiApiKey: '',
 
       setTheme: (theme) => set({ theme }),
 
@@ -19,7 +21,14 @@ export const useSettingsStore = create(
       setEnergyLevel: (energyLevel) =>
         set({ energyLevel, lastEnergyCheckIn: dayjs().format('YYYY-MM-DD') }),
 
+      setAiProvider: (aiProvider) => set({ aiProvider }),
       setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
+      setGeminiApiKey: (geminiApiKey) => set({ geminiApiKey }),
+
+      getActiveApiKey: () => {
+        const { aiProvider, claudeApiKey, geminiApiKey } = get();
+        return aiProvider === 'gemini' ? geminiApiKey : claudeApiKey;
+      },
 
       needsEnergyCheckIn: () => {
         const { lastEnergyCheckIn } = get();

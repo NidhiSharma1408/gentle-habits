@@ -28,14 +28,15 @@ Key principles:
 
 ### AI-Powered Step Generation
 
-Gentle Habits integrates with the Claude API to help you break habits into manageable micro-steps:
+Gentle Habits integrates with **Claude (Anthropic)** or **Gemini (Google)** to help you break habits into manageable micro-steps:
 
+- **Choose your AI provider** — pick between Claude and Gemini in Settings
 - **Generate steps** — when creating a new habit, describe your context (e.g. "I have ADHD and need very small steps") and AI generates 4-8 detailed micro-steps plus a simplified easy version
 - **Update steps** — refine existing steps with natural language feedback (e.g. "make the steps shorter" or "add a step for setting out clothes")
 - **Prompt modal** — a dedicated window where you can explain how detailed or specific you want the steps to be
 - **Easy version included** — AI also generates 2-3 simplified alt-steps for low-energy days
 
-To use AI features, add your Claude API key in Settings > AI Steps.
+To use AI features, choose your provider and add the corresponding API key in Settings > AI Steps.
 
 ## Tech Stack
 
@@ -47,7 +48,7 @@ To use AI features, add your Claude API key in Settings > AI Steps.
 - **React Router v6** — client-side routing
 - **Lucide React** — icons
 - **Day.js** — date formatting
-- **Claude API** — AI-powered habit step generation
+- **Claude API / Gemini API** — AI-powered habit step generation (user-selectable provider)
 
 ## Setup
 
@@ -66,7 +67,7 @@ npm run build
 npm run preview
 ```
 
-> **Note:** The dev server includes a proxy for the Claude API (`/api/claude` -> `api.anthropic.com`) to handle CORS. For production deployment, you'll need a backend proxy or serverless function to forward API requests.
+> **Note:** The dev server includes proxies for AI APIs (`/api/claude` -> `api.anthropic.com`, `/api/gemini` -> `generativelanguage.googleapis.com`) to handle CORS. For production deployment, you'll need a backend proxy or serverless function to forward API requests.
 
 ## Project Structure
 
@@ -80,7 +81,7 @@ src/
 ├── data/             # prebuiltHabits.js
 ├── hooks/            # useHabitProgress, useTheme, useWhatNext, useLocalStorage
 ├── pages/            # Home, HabitDetail, Habits, HabitForm, Settings
-├── services/         # claudeApi.js (AI step generation)
+├── services/         # aiService.js (unified Claude/Gemini AI step generation)
 ├── store/            # habitsStore, progressStore, settingsStore
 ├── styles/           # global.css, theme.css, typography.css
 └── utils/            # habitHelpers.js, suggestions.js

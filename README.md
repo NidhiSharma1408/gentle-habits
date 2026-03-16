@@ -24,49 +24,64 @@ Key principles:
 - Full custom habit creation and editing
 - "I rested today — that counts too" button
 - Data persistence via localStorage, with automatic 30-day pruning
+- Reorder steps with up/down buttons or drag-and-drop
+
+### AI-Powered Step Generation
+
+Gentle Habits integrates with **Claude (Anthropic)** or **Gemini (Google)** to help you break habits into manageable micro-steps:
+
+- **Choose your AI provider** — pick between Claude and Gemini in Settings
+- **Generate steps** — when creating a new habit, describe your context (e.g. "I have ADHD and need very small steps") and AI generates 4-8 detailed micro-steps plus a simplified easy version
+- **Update steps** — refine existing steps with natural language feedback (e.g. "make the steps shorter" or "add a step for setting out clothes")
+- **Prompt modal** — a dedicated window where you can explain how detailed or specific you want the steps to be
+- **Easy version included** — AI also generates 2-3 simplified alt-steps for low-energy days
+
+To use AI features, choose your provider and add the corresponding API key in Settings > AI Steps.
 
 ## Tech Stack
 
-- **React 19** — UI framework
+- **React 18** — UI framework
+- **Vite 5** — build tool and dev server
 - **CSS Modules** — scoped component styles
 - **Zustand** — state management with localStorage persistence
 - **Framer Motion** — animations (fade, spring, stagger)
 - **React Router v6** — client-side routing
 - **Lucide React** — icons
 - **Day.js** — date formatting
-- **esbuild** — fast bundler
+- **Claude API / Gemini API** — AI-powered habit step generation (user-selectable provider)
 
 ## Setup
 
 ```bash
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+# Open http://localhost:5173
+
 # Build for production
 npm run build
 
-# The output is in dist/
-# Open dist/index.html in a browser (or serve it with any static server)
+# Preview production build
+npm run preview
 ```
 
-For local development, the dev server serves the `dist/` directory:
-
-```bash
-npm run dev
-# Open http://localhost:3000
-```
-
-> **Note:** This project uses a custom build setup with esbuild. The standard `npm install` will not work in environments without registry access. The shims for Zustand, Framer Motion, Lucide React, Day.js, and React Router are included in `node_modules/` as lightweight custom implementations.
+> **Note:** The dev server includes proxies for AI APIs (`/api/claude` -> `api.anthropic.com`, `/api/gemini` -> `generativelanguage.googleapis.com`) to handle CORS. For production deployment, you'll need a backend proxy or serverless function to forward API requests.
 
 ## Project Structure
 
 ```
 src/
 ├── components/
-│   ├── habits/       # HabitCard, HabitStepList
+│   ├── habits/       # HabitCard, HabitStepList, AIPromptModal
 │   ├── layout/       # AppShell, BottomNav
 │   ├── ui/           # Button, Badge, Modal, ProgressBar, Toggle
 │   └── widgets/      # DayLog, EnergyCheckIn, WhatNext
 ├── data/             # prebuiltHabits.js
 ├── hooks/            # useHabitProgress, useTheme, useWhatNext, useLocalStorage
 ├── pages/            # Home, HabitDetail, Habits, HabitForm, Settings
+├── services/         # aiService.js (unified Claude/Gemini AI step generation)
 ├── store/            # habitsStore, progressStore, settingsStore
 ├── styles/           # global.css, theme.css, typography.css
 └── utils/            # habitHelpers.js, suggestions.js
@@ -74,7 +89,7 @@ src/
 
 ## Accessibility
 
-- All interactive elements meet the 44×44px minimum touch target size
+- All interactive elements meet the 44x44px minimum touch target size
 - Full keyboard navigation with `:focus-visible` outlines
 - ARIA roles: `dialog`, `switch`, `checkbox`, `progressbar`
 - Screen reader labels on all icon-only buttons

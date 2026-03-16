@@ -1,0 +1,19 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Claude API proxy is handled by edge function (netlify/edge-functions/claude-proxy.js)
+# because it needs to forward custom headers (x-api-key, anthropic-version)
+
+# Gemini API proxy (key is in URL query param, no custom headers needed)
+[[redirects]]
+  from = "/api/gemini/*"
+  to = "https://generativelanguage.googleapis.com/:splat"
+  status = 200
+  force = true
+
+# SPA fallback (catch-all, must be last)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

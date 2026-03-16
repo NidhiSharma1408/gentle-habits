@@ -67,7 +67,7 @@ npm run build
 npm run preview
 ```
 
-> **Note:** The dev server includes proxies for AI APIs (`/api/claude` -> `api.anthropic.com`, `/api/gemini` -> `generativelanguage.googleapis.com`) to handle CORS. For production deployment, you'll need a backend proxy or serverless function to forward API requests.
+> **Note:** In development, Vite proxies AI API requests to avoid CORS. For production, a `netlify.toml` and edge function are included — just deploy to Netlify and it works out of the box.
 
 ## Project Structure
 

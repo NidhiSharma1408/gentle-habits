@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Eye, EyeOff } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 import { useSettingsStore } from '../../store/settingsStore';
 import Toggle from '../../components/ui/Toggle/Toggle';
@@ -14,6 +15,9 @@ const pageVariants = {
 export default function Settings() {
   const { theme, toggleTheme } = useTheme();
   const setEnergyLevel = useSettingsStore((s) => s.setEnergyLevel);
+  const claudeApiKey = useSettingsStore((s) => s.claudeApiKey);
+  const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
+  const [showKey, setShowKey] = useState(false);
 
   const resetAll = () => {
     if (window.confirm('This will clear all habits, progress, and settings. Are you sure?')) {
@@ -57,6 +61,33 @@ export default function Settings() {
             🫧 Survival
           </button>
         </div>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>AI Steps</h2>
+        <p className={styles.desc}>
+          Add your Claude API key to generate habit steps with AI.
+        </p>
+        <div className={styles.apiKeyRow}>
+          <input
+            className={styles.apiKeyInput}
+            type={showKey ? 'text' : 'password'}
+            value={claudeApiKey}
+            onChange={(e) => setClaudeApiKey(e.target.value)}
+            placeholder="sk-ant-..."
+            autoComplete="off"
+          />
+          <button
+            className={styles.apiKeyToggle}
+            onClick={() => setShowKey(!showKey)}
+            aria-label={showKey ? 'Hide API key' : 'Show API key'}
+          >
+            {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+        <p className={styles.desc}>
+          Your key is stored locally and never sent to any server except Anthropic.
+        </p>
       </section>
 
       <section className={styles.section}>

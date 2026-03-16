@@ -9,6 +9,7 @@ export const useSettingsStore = create(
       theme: 'light',
       energyLevel: null,
       lastEnergyCheckIn: null,
+      claudeApiKey: '',
 
       setTheme: (theme) => set({ theme }),
 
@@ -17,6 +18,8 @@ export const useSettingsStore = create(
 
       setEnergyLevel: (energyLevel) =>
         set({ energyLevel, lastEnergyCheckIn: dayjs().format('YYYY-MM-DD') }),
+
+      setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
 
       needsEnergyCheckIn: () => {
         const { lastEnergyCheckIn } = get();

@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Sparkles } from 'lucide-react';
 import { useHabitsStore } from '../../store/habitsStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { generateSteps, updateSteps } from '../../services/claudeApi';
 import Button from '../../components/ui/Button/Button';
+import AIPromptModal from '../../components/habits/AIPromptModal/AIPromptModal';
 import styles from './HabitForm.module.css';
 
 const SCHEDULES = [
@@ -17,6 +20,9 @@ const ICONS = ['🛁', '🦷', '💧', '🍽️', '👕', '🌿', '🧹', '🌙'
 
 const emptyStep = (order) => ({ id: crypto.randomUUID(), text: '', order });
 
+const toStepObjects = (texts) =>
+  texts.map((text, i) => ({ id: crypto.randomUUID(), text, order: i }));
+
 const pageVariants = {
   initial: { opacity: 0, y: 10 },
   animate: { opacity: 1, y: 0 },
@@ -29,6 +35,7 @@ export default function HabitForm() {
   const addHabit = useHabitsStore((s) => s.addHabit);
   const editHabit = useHabitsStore((s) => s.editHabit);
   const deleteHabit = useHabitsStore((s) => s.deleteHabit);
+  const claudeApiKey = useSettingsStore((s) => s.claudeApiKey);
 
   const existing = id ? getHabit(id) : null;
 
@@ -42,8 +49,44 @@ export default function HabitForm() {
     existing?.altSteps?.length ? existing.altSteps : [emptyStep(0)]
   );
   const [altLabel, setAltLabel] = useState(existing?.altLabel ?? '');
+  const [showAIModal, setShowAIModal] = useState(false);
 
   const isValid = name.trim() && steps.some((s) => s.text.trim());
+  const hasExistingSteps = steps.some((s) => s.text.trim());
+
+  const handleAIGenerate = async (userContext) => {
+    if (!claudeApiKey) {
+      throw new Error('Please add your Claude API key in Settings first.');
+    }
+
+    const currentStepTexts = steps.filter((s) => s.text.trim()).map((s) => s.text);
+
+    let result;
+    if (hasExistingSteps && currentStepTexts.length > 0) {
+      result = await updateSteps(claudeApiKey, {
+        habitName: name,
+        currentSteps: currentStepTexts,
+        userContext,
+        schedule,
+      });
+    } else {
+      result = await generateSteps(claudeApiKey, {
+        habitName: name,
+        userContext,
+        schedule,
+      });
+    }
+
+    if (result.steps?.length) {
+      setSteps(toStepObjects(result.steps));
+    }
+    if (result.altSteps?.length) {
+      setAltSteps(toStepObjects(result.altSteps));
+    }
+    if (result.altLabel) {
+      setAltLabel(result.altLabel);
+    }
+  };
 
   const save = () => {
     const payload = {
@@ -136,7 +179,14 @@ export default function HabitForm() {
       </div>
 
       <div className={styles.section}>
-        <h2 className={styles.sectionTitle}>Full-energy steps</h2>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Full-energy steps</h2>
+          {claudeApiKey && name.trim() && (
+            <Button variant="soft" size="sm" onClick={() => setShowAIModal(true)}>
+              <Sparkles size={14} /> {hasExistingSteps ? 'AI update' : 'AI generate'}
+            </Button>
+          )}
+        </div>
         {steps.map((step, idx) => (
           <div key={step.id} className={styles.stepRow}>
             <input
@@ -210,6 +260,14 @@ export default function HabitForm() {
           {existing ? 'Save changes' : 'Create habit'}
         </Button>
       </div>
+
+      <AIPromptModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        onGenerate={handleAIGenerate}
+        habitName={name}
+        isUpdate={hasExistingSteps}
+      />
     </motion.div>
   );
 }

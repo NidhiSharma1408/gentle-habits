@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Edit2 } from 'lucide-react';
+import { ArrowLeft, Edit2, Sparkles } from 'lucide-react';
 import { useHabitProgress } from '../../hooks/useHabitProgress';
+import { useHabitsStore } from '../../store/habitsStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { updateSteps } from '../../services/claudeApi';
 import HabitStepList from '../../components/habits/HabitStepList/HabitStepList';
 import ProgressBar from '../../components/ui/ProgressBar/ProgressBar';
 import Toggle from '../../components/ui/Toggle/Toggle';
-import { useSettingsStore } from '../../store/settingsStore';
+import Button from '../../components/ui/Button/Button';
+import AIPromptModal from '../../components/habits/AIPromptModal/AIPromptModal';
 import styles from './HabitDetail.module.css';
 
 const AFFIRMATIONS = [
@@ -25,6 +30,9 @@ export default function HabitDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const energyLevel = useSettingsStore((s) => s.energyLevel);
+  const claudeApiKey = useSettingsStore((s) => s.claudeApiKey);
+  const editHabit = useHabitsStore((s) => s.editHabit);
+  const [showAIModal, setShowAIModal] = useState(false);
 
   const {
     habit,
@@ -47,6 +55,40 @@ export default function HabitDetail() {
 
   const affirmation = AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
 
+  const handleAIUpdate = async (userContext) => {
+    if (!claudeApiKey) {
+      throw new Error('Please add your Claude API key in Settings first.');
+    }
+
+    const currentStepTexts = habit.steps.map((s) => s.text);
+    const result = await updateSteps(claudeApiKey, {
+      habitName: habit.name,
+      currentSteps: currentStepTexts,
+      userContext,
+      schedule: habit.schedule,
+    });
+
+    const updates = {};
+    if (result.steps?.length) {
+      updates.steps = result.steps.map((text, i) => ({
+        id: crypto.randomUUID(),
+        text,
+        order: i,
+      }));
+    }
+    if (result.altSteps?.length) {
+      updates.altSteps = result.altSteps.map((text, i) => ({
+        id: crypto.randomUUID(),
+        text,
+        order: i,
+      }));
+    }
+    if (result.altLabel) {
+      updates.altLabel = result.altLabel;
+    }
+    editHabit(id, updates);
+  };
+
   return (
     <motion.div
       className={styles.page}
@@ -59,13 +101,24 @@ export default function HabitDetail() {
         <button onClick={() => navigate(-1)} className={styles.back} aria-label="Go back">
           <ArrowLeft size={20} />
         </button>
-        <button
-          onClick={() => navigate(`/habits/${id}/edit`)}
-          className={styles.edit}
-          aria-label="Edit habit"
-        >
-          <Edit2 size={18} />
-        </button>
+        <div className={styles.topActions}>
+          {claudeApiKey && (
+            <button
+              onClick={() => setShowAIModal(true)}
+              className={styles.edit}
+              aria-label="Update steps with AI"
+            >
+              <Sparkles size={18} />
+            </button>
+          )}
+          <button
+            onClick={() => navigate(`/habits/${id}/edit`)}
+            className={styles.edit}
+            aria-label="Edit habit"
+          >
+            <Edit2 size={18} />
+          </button>
+        </div>
       </div>
 
       <div className={styles.hero}>
@@ -122,6 +175,14 @@ export default function HabitDetail() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AIPromptModal
+        isOpen={showAIModal}
+        onClose={() => setShowAIModal(false)}
+        onGenerate={handleAIUpdate}
+        habitName={habit.name}
+        isUpdate
+      />
     </motion.div>
   );
 }

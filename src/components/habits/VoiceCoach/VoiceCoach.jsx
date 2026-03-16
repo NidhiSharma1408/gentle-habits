@@ -40,7 +40,7 @@ export default function VoiceCoach({ steps, completedSteps, onToggle, isComplete
               {isListening && (
                 <span className={styles.listening}>
                   <span className={styles.pulse} />
-                  Listening — say "done"
+                  Listening — double clap when done
                 </span>
               )}
             </div>
@@ -58,7 +58,7 @@ export default function VoiceCoach({ steps, completedSteps, onToggle, isComplete
       </button>
 
       {!isActive && !isComplete && (
-        <p className={styles.hint}>Tap to start voice coach</p>
+        <p className={styles.hint}>Tap to start voice coach — double clap to complete steps</p>
       )}
     </div>
   );

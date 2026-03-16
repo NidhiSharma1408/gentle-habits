@@ -1,9 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
-const DONE_PHRASES = ['done', 'next', 'check', 'finished', 'complete', 'yes', 'okay', 'ok', 'yep', 'yup'];
-const SKIP_PHRASES = ['skip', 'pass'];
-const STOP_PHRASES = ['stop', 'quit', 'exit', 'cancel'];
-
+// --- TTS (text-to-speech) ---
 function speak(text) {
   return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance(text);
@@ -19,17 +16,32 @@ function stopSpeaking() {
   speechSynthesis.cancel();
 }
 
+// --- Clap detection config ---
+const CLAP_THRESHOLD = 0.35;       // Amplitude spike to count as a clap (0-1)
+const DOUBLE_CLAP_WINDOW = 600;    // Max ms between two claps
+const CLAP_COOLDOWN = 800;         // Ignore claps for this long after detecting a double-clap
+const REPEAT_TIMEOUT = 45000;      // Re-read step after 45s of no action
+
 export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
   const [isActive, setIsActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentStepIdx, setCurrentStepIdx] = useState(null);
-  const recognitionRef = useRef(null);
+
   const activeRef = useRef(false);
   const currentStepIdxRef = useRef(null);
-  const restartTimerRef = useRef(null);
-  const startTimeRef = useRef(null);
-  const failCountRef = useRef(0);
+
+  // Audio refs
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef = useRef(null);
+
+  // Clap detection refs
+  const lastClapTimeRef = useRef(0);
+  const cooldownUntilRef = useRef(0);
+  const repeatTimerRef = useRef(null);
+  const isSpeakingRef = useRef(false);
 
   // Find next incomplete step
   const getNextIncompleteIdx = useCallback((fromIdx = -1) => {
@@ -40,231 +52,237 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
     return null;
   }, [steps, completedSteps]);
 
-  const clearRestartTimer = useCallback(() => {
-    if (restartTimerRef.current) {
-      clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = null;
+  const clearRepeatTimer = useCallback(() => {
+    if (repeatTimerRef.current) {
+      clearTimeout(repeatTimerRef.current);
+      repeatTimerRef.current = null;
     }
   }, []);
 
-  const stopRecognition = useCallback(() => {
-    clearRestartTimer();
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
-      recognitionRef.current = null;
+  const startRepeatTimer = useCallback((stepIdx) => {
+    clearRepeatTimer();
+    repeatTimerRef.current = setTimeout(() => {
+      if (activeRef.current && !isSpeakingRef.current) {
+        speakStep(stepIdx);
+      }
+    }, REPEAT_TIMEOUT);
+  }, [clearRepeatTimer]);
+
+  // --- Audio setup ---
+  const stopAudio = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
-  }, [clearRestartTimer]);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    analyserRef.current = null;
+  }, []);
+
+  const handleDoubleClap = useCallback(async (stepIdx) => {
+    if (!activeRef.current || isSpeakingRef.current) return;
+
+    // Mark step done
+    onToggle(steps[stepIdx].id);
+
+    isSpeakingRef.current = true;
+    setIsSpeaking(true);
+    clearRepeatTimer();
+    await speak('Nice!');
+    isSpeakingRef.current = false;
+    setIsSpeaking(false);
+
+    if (!activeRef.current) return;
+
+    // Move to next
+    const nextIdx = getNextIncompleteIdx(stepIdx);
+    if (nextIdx !== null) {
+      speakStep(nextIdx);
+    } else {
+      isSpeakingRef.current = true;
+      setIsSpeaking(true);
+      await speak('All done. Amazing work today!');
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      stopCoach();
+    }
+  }, [steps, onToggle, getNextIncompleteIdx, clearRepeatTimer]);
 
   const startListening = useCallback((stepIdx) => {
     if (!activeRef.current) return;
 
-    stopRecognition();
+    const analyser = analyserRef.current;
+    if (!analyser) return;
 
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    // Use non-continuous mode — it's more reliable across browsers
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-    recognition.maxAlternatives = 3;
-
-    recognitionRef.current = recognition;
-    currentStepIdxRef.current = stepIdx;
-    startTimeRef.current = Date.now();
+    const dataArray = new Uint8Array(analyser.fftSize);
     setIsListening(true);
+    startRepeatTimer(stepIdx);
 
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.toLowerCase().trim();
-      failCountRef.current = 0; // Reset fail count on successful result
-      setIsListening(false);
-      recognitionRef.current = null;
-
+    const detect = () => {
       if (!activeRef.current) return;
 
-      handleTranscript(transcript, stepIdx);
-    };
+      analyser.getByteTimeDomainData(dataArray);
 
-    recognition.onerror = (event) => {
-      console.log('Speech error:', event.error);
-      // Don't set isListening false here — onend will fire after this
-    };
+      // Calculate peak amplitude (0–1)
+      let peak = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const val = Math.abs(dataArray[i] - 128) / 128;
+        if (val > peak) peak = val;
+      }
 
-    recognition.onend = () => {
-      recognitionRef.current = null;
+      const now = Date.now();
 
-      if (!activeRef.current) {
-        setIsListening(false);
+      // Skip during cooldown or while speaking
+      if (now < cooldownUntilRef.current || isSpeakingRef.current) {
+        rafRef.current = requestAnimationFrame(detect);
         return;
       }
 
-      // Check how long recognition actually ran
-      const elapsed = Date.now() - (startTimeRef.current || 0);
+      if (peak > CLAP_THRESHOLD) {
+        const timeSinceLastClap = now - lastClapTimeRef.current;
 
-      if (elapsed < 500) {
-        // Died immediately — likely a permission/browser issue
-        failCountRef.current++;
-        if (failCountRef.current >= 3) {
-          // Stop trying after 3 rapid failures
-          console.warn('Speech recognition keeps failing. Stopping auto-restart.');
-          setIsListening(false);
-          return;
+        if (timeSinceLastClap < DOUBLE_CLAP_WINDOW && timeSinceLastClap > 100) {
+          // Double clap detected!
+          lastClapTimeRef.current = 0;
+          cooldownUntilRef.current = now + CLAP_COOLDOWN;
+          clearRepeatTimer();
+          handleDoubleClap(currentStepIdxRef.current);
+        } else {
+          // First clap — wait for second
+          lastClapTimeRef.current = now;
         }
-      } else {
-        // Ran for a reasonable time (just no speech detected) — reset fail count
-        failCountRef.current = 0;
       }
 
-      // Restart with increasing delay based on fail count
-      const delay = Math.min(300 + failCountRef.current * 500, 2000);
-      setIsListening(false);
-
-      restartTimerRef.current = setTimeout(() => {
-        restartTimerRef.current = null;
-        if (activeRef.current) {
-          startListening(currentStepIdxRef.current);
-        }
-      }, delay);
+      rafRef.current = requestAnimationFrame(detect);
     };
 
-    try {
-      recognition.start();
-    } catch (e) {
-      console.warn('Failed to start recognition:', e);
-      recognitionRef.current = null;
-      setIsListening(false);
+    rafRef.current = requestAnimationFrame(detect);
+  }, [startRepeatTimer, clearRepeatTimer, handleDoubleClap]);
 
-      restartTimerRef.current = setTimeout(() => {
-        restartTimerRef.current = null;
-        if (activeRef.current) startListening(stepIdx);
-      }, 1000);
-    }
-  }, [stopRecognition]);
-
-  const handleTranscript = useCallback(async (transcript, stepIdx) => {
-    if (!activeRef.current) return;
-
-    if (DONE_PHRASES.some((p) => transcript.includes(p))) {
-      onToggle(steps[stepIdx].id);
-      await speak('Done! Nice work.');
-
-      if (!activeRef.current) return;
-
-      const nextIdx = getNextIncompleteIdx(stepIdx);
-      if (nextIdx !== null) {
-        speakAndListen(nextIdx);
-      } else {
-        await speak('All steps complete. You did it! Amazing work today.');
-        stop();
-      }
-    } else if (SKIP_PHRASES.some((p) => transcript.includes(p))) {
-      await speak('Skipping this step.');
-      if (!activeRef.current) return;
-      const nextIdx = getNextIncompleteIdx(stepIdx);
-      if (nextIdx !== null) {
-        speakAndListen(nextIdx);
-      } else {
-        await speak('No more steps to skip.');
-        stop();
-      }
-    } else if (STOP_PHRASES.some((p) => transcript.includes(p))) {
-      await speak('Voice coach paused. Tap the mic to resume.');
-      stop();
-    } else {
-      // Didn't match a command — restart listening silently
-      if (activeRef.current) {
-        startListening(stepIdx);
-      }
-    }
-  }, [steps, onToggle, getNextIncompleteIdx, startListening]);
-
-  const speakAndListen = useCallback(async (stepIdx) => {
+  const speakStep = useCallback(async (stepIdx) => {
     if (!activeRef.current || !steps?.[stepIdx]) return;
 
-    stopRecognition();
     setCurrentStepIdx(stepIdx);
     currentStepIdxRef.current = stepIdx;
+
+    isSpeakingRef.current = true;
     setIsSpeaking(true);
+    setIsListening(false);
+
+    // Cancel any ongoing detection loop during speech
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
 
     const stepNum = stepIdx + 1;
     const totalSteps = steps.length;
     await speak(`Step ${stepNum} of ${totalSteps}. ${steps[stepIdx].text}`);
 
+    isSpeakingRef.current = false;
     setIsSpeaking(false);
 
     if (!activeRef.current) return;
 
-    // Small delay before listening to avoid catching tail-end of TTS audio
-    await new Promise((r) => setTimeout(r, 300));
-    if (!activeRef.current) return;
-
-    failCountRef.current = 0;
+    // Reset clap state and start listening
+    lastClapTimeRef.current = 0;
+    cooldownUntilRef.current = Date.now() + 500; // Brief cooldown after speech
     startListening(stepIdx);
-  }, [steps, stopRecognition, startListening]);
+  }, [steps, startListening]);
 
-  const stop = useCallback(() => {
+  const stopCoach = useCallback(() => {
     activeRef.current = false;
     setIsActive(false);
     setIsListening(false);
     setIsSpeaking(false);
     setCurrentStepIdx(null);
     currentStepIdxRef.current = null;
-    failCountRef.current = 0;
+    isSpeakingRef.current = false;
+    lastClapTimeRef.current = 0;
+    cooldownUntilRef.current = 0;
+    clearRepeatTimer();
     stopSpeaking();
-    stopRecognition();
-  }, [stopRecognition]);
+    stopAudio();
+  }, [clearRepeatTimer, stopAudio]);
 
-  const start = useCallback(async () => {
+  const startCoach = useCallback(async () => {
     if (isComplete) return;
+
+    // Request mic access
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      alert('Microphone access is needed for voice coach.');
+      return;
+    }
+
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+
+    audioContextRef.current = audioContext;
+    analyserRef.current = analyser;
+    streamRef.current = stream;
 
     activeRef.current = true;
     setIsActive(true);
-    failCountRef.current = 0;
 
     const firstIdx = getNextIncompleteIdx(-1);
     if (firstIdx === null) {
       await speak('All steps are already complete!');
-      stop();
+      stopCoach();
       return;
     }
 
-    await speak(`Let's go. I'll read each step. Say done when you finish it.`);
+    isSpeakingRef.current = true;
+    setIsSpeaking(true);
+    await speak(`Let's go. I'll read each step. Double clap when you're done.`);
+    isSpeakingRef.current = false;
+    setIsSpeaking(false);
+
     if (activeRef.current) {
-      speakAndListen(firstIdx);
+      speakStep(firstIdx);
     }
-  }, [isComplete, getNextIncompleteIdx, speakAndListen, stop]);
+  }, [isComplete, getNextIncompleteIdx, speakStep, stopCoach]);
 
   const toggle = useCallback(() => {
     if (isActive) {
-      stop();
+      stopCoach();
     } else {
-      start();
+      startCoach();
     }
-  }, [isActive, start, stop]);
+  }, [isActive, startCoach, stopCoach]);
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
       activeRef.current = false;
       stopSpeaking();
-      stopRecognition();
+      stopAudio();
+      clearRepeatTimer();
     };
-  }, [stopRecognition]);
+  }, [stopAudio, clearRepeatTimer]);
 
   // Stop if habit completes externally
   useEffect(() => {
     if (isComplete && isActive) {
-      stop();
+      stopCoach();
     }
-  }, [isComplete, isActive, stop]);
+  }, [isComplete, isActive, stopCoach]);
 
   const isSupported =
     typeof window !== 'undefined' &&
     ('speechSynthesis' in window) &&
-    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+    ('mediaDevices' in navigator);
 
   return {
     isActive,
@@ -273,7 +291,7 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
     currentStepIdx,
     isSupported,
     toggle,
-    start,
-    stop,
+    start: startCoach,
+    stop: stopCoach,
   };
 }

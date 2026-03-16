@@ -46,8 +46,10 @@ Keep what works, improve what doesn't, and apply the user's feedback.`;
 
 function parseJsonResponse(text) {
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    // Strip markdown code fences (```json ... ```) that Gemini often adds
+    const stripped = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '');
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/);
+    return JSON.parse(jsonMatch ? jsonMatch[0] : stripped);
   } catch {
     throw new Error('Failed to parse AI response. Please try again.');
   }
@@ -55,7 +57,7 @@ function parseJsonResponse(text) {
 
 // ── Claude provider ─────────────────────────────────────────────────────────
 
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514'; // Claude Sonnet 4.6
 
 async function callClaude(apiKey, userPrompt) {
   const res = await fetch('/api/claude/v1/messages', {
@@ -85,7 +87,7 @@ async function callClaude(apiKey, userPrompt) {
 
 // ── Gemini provider ─────────────────────────────────────────────────────────
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 async function callGemini(apiKey, userPrompt) {
   const res = await fetch(
@@ -96,7 +98,7 @@ async function callGemini(apiKey, userPrompt) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ parts: [{ text: userPrompt }] }],
-        generationConfig: { maxOutputTokens: 1024 },
+        generationConfig: { maxOutputTokens: 8192 },
       }),
     }
   );

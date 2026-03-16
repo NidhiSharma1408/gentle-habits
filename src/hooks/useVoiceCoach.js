@@ -26,8 +26,10 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
   const [currentStepIdx, setCurrentStepIdx] = useState(null);
   const recognitionRef = useRef(null);
   const activeRef = useRef(false);
-  const gotResultRef = useRef(false);
   const currentStepIdxRef = useRef(null);
+  const restartTimerRef = useRef(null);
+  const startTimeRef = useRef(null);
+  const failCountRef = useRef(0);
 
   // Find next incomplete step
   const getNextIncompleteIdx = useCallback((fromIdx = -1) => {
@@ -38,17 +40,24 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
     return null;
   }, [steps, completedSteps]);
 
+  const clearRestartTimer = useCallback(() => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  }, []);
+
   const stopRecognition = useCallback(() => {
+    clearRestartTimer();
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch {}
       recognitionRef.current = null;
     }
-  }, []);
+  }, [clearRestartTimer]);
 
   const startListening = useCallback((stepIdx) => {
     if (!activeRef.current) return;
 
-    // Clean up any existing recognition
     stopRecognition();
 
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -57,62 +66,81 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    // Use non-continuous mode — it's more reliable across browsers
+    recognition.continuous = false;
     recognition.interimResults = false;
     recognition.lang = 'en-US';
     recognition.maxAlternatives = 3;
 
     recognitionRef.current = recognition;
-    gotResultRef.current = false;
     currentStepIdxRef.current = stepIdx;
+    startTimeRef.current = Date.now();
     setIsListening(true);
 
     recognition.onresult = (event) => {
-      // Check the latest result
-      const lastResult = event.results[event.results.length - 1];
-      if (!lastResult.isFinal) return;
-
-      gotResultRef.current = true;
-      const transcript = lastResult[0].transcript.toLowerCase().trim();
+      const transcript = event.results[0][0].transcript.toLowerCase().trim();
+      failCountRef.current = 0; // Reset fail count on successful result
+      setIsListening(false);
+      recognitionRef.current = null;
 
       if (!activeRef.current) return;
-
-      // Stop recognition before processing to avoid overlaps
-      stopRecognition();
-      setIsListening(false);
 
       handleTranscript(transcript, stepIdx);
     };
 
     recognition.onerror = (event) => {
-      // no-speech and aborted are normal — just restart
-      if (event.error === 'no-speech' || event.error === 'aborted') {
-        return; // onend will handle restart
-      }
-      // For other errors, log and restart
-      console.warn('Speech recognition error:', event.error);
+      console.log('Speech error:', event.error);
+      // Don't set isListening false here — onend will fire after this
     };
 
     recognition.onend = () => {
-      setIsListening(false);
-      // If we didn't get a result and we're still active, restart listening
-      if (activeRef.current && !gotResultRef.current) {
-        setTimeout(() => {
-          if (activeRef.current) {
-            startListening(currentStepIdxRef.current);
-          }
-        }, 100);
+      recognitionRef.current = null;
+
+      if (!activeRef.current) {
+        setIsListening(false);
+        return;
       }
+
+      // Check how long recognition actually ran
+      const elapsed = Date.now() - (startTimeRef.current || 0);
+
+      if (elapsed < 500) {
+        // Died immediately — likely a permission/browser issue
+        failCountRef.current++;
+        if (failCountRef.current >= 3) {
+          // Stop trying after 3 rapid failures
+          console.warn('Speech recognition keeps failing. Stopping auto-restart.');
+          setIsListening(false);
+          return;
+        }
+      } else {
+        // Ran for a reasonable time (just no speech detected) — reset fail count
+        failCountRef.current = 0;
+      }
+
+      // Restart with increasing delay based on fail count
+      const delay = Math.min(300 + failCountRef.current * 500, 2000);
+      setIsListening(false);
+
+      restartTimerRef.current = setTimeout(() => {
+        restartTimerRef.current = null;
+        if (activeRef.current) {
+          startListening(currentStepIdxRef.current);
+        }
+      }, delay);
     };
 
     try {
       recognition.start();
     } catch (e) {
       console.warn('Failed to start recognition:', e);
-      // Retry after a short delay
-      setTimeout(() => {
+      recognitionRef.current = null;
+      setIsListening(false);
+
+      restartTimerRef.current = setTimeout(() => {
+        restartTimerRef.current = null;
         if (activeRef.current) startListening(stepIdx);
-      }, 500);
+      }, 1000);
     }
   }, [stopRecognition]);
 
@@ -146,14 +174,13 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
       await speak('Voice coach paused. Tap the mic to resume.');
       stop();
     } else {
-      // Didn't understand — just keep listening, don't interrupt
+      // Didn't match a command — restart listening silently
       if (activeRef.current) {
         startListening(stepIdx);
       }
     }
   }, [steps, onToggle, getNextIncompleteIdx, startListening]);
 
-  // Speak a step and then listen for response
   const speakAndListen = useCallback(async (stepIdx) => {
     if (!activeRef.current || !steps?.[stepIdx]) return;
 
@@ -170,6 +197,11 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
 
     if (!activeRef.current) return;
 
+    // Small delay before listening to avoid catching tail-end of TTS audio
+    await new Promise((r) => setTimeout(r, 300));
+    if (!activeRef.current) return;
+
+    failCountRef.current = 0;
     startListening(stepIdx);
   }, [steps, stopRecognition, startListening]);
 
@@ -180,6 +212,7 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
     setIsSpeaking(false);
     setCurrentStepIdx(null);
     currentStepIdxRef.current = null;
+    failCountRef.current = 0;
     stopSpeaking();
     stopRecognition();
   }, [stopRecognition]);
@@ -189,6 +222,7 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
 
     activeRef.current = true;
     setIsActive(true);
+    failCountRef.current = 0;
 
     const firstIdx = getNextIncompleteIdx(-1);
     if (firstIdx === null) {

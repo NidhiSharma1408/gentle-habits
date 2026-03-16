@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, ArrowLeft, Sparkles } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
 import { useHabitsStore } from '../../store/habitsStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { generateSteps, updateSteps } from '../../services/claudeApi';
@@ -50,6 +50,9 @@ export default function HabitForm() {
   );
   const [altLabel, setAltLabel] = useState(existing?.altLabel ?? '');
   const [showAIModal, setShowAIModal] = useState(false);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [dragList, setDragList] = useState(null); // 'steps' or 'altSteps'
 
   const isValid = name.trim() && steps.some((s) => s.text.trim());
   const hasExistingSteps = steps.some((s) => s.text.trim());
@@ -121,6 +124,46 @@ export default function HabitForm() {
   const removeStep = (list, setList, idx) =>
     setList(list.filter((_, i) => i !== idx));
 
+  const moveStep = (list, setList, fromIdx, toIdx) => {
+    if (toIdx < 0 || toIdx >= list.length) return;
+    const reordered = [...list];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setList(reordered.map((s, i) => ({ ...s, order: i })));
+  };
+
+  const handleDragStart = (idx, listName) => {
+    setDragIdx(idx);
+    setDragList(listName);
+  };
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    setDragOverIdx(idx);
+  };
+
+  const handleDrop = (idx, list, setList) => {
+    if (dragIdx === null || dragIdx === idx) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      setDragList(null);
+      return;
+    }
+    const reordered = [...list];
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(idx, 0, moved);
+    setList(reordered.map((s, i) => ({ ...s, order: i })));
+    setDragIdx(null);
+    setDragOverIdx(null);
+    setDragList(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+    setDragList(null);
+  };
+
   return (
     <motion.div
       className={styles.page}
@@ -188,7 +231,33 @@ export default function HabitForm() {
           )}
         </div>
         {steps.map((step, idx) => (
-          <div key={step.id} className={styles.stepRow}>
+          <div
+            key={step.id}
+            className={`${styles.stepRow} ${dragList === 'steps' && dragOverIdx === idx ? styles.stepRowDragOver : ''} ${dragList === 'steps' && dragIdx === idx ? styles.stepRowDragging : ''}`}
+            draggable
+            onDragStart={() => handleDragStart(idx, 'steps')}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={() => handleDrop(idx, steps, setSteps)}
+            onDragEnd={handleDragEnd}
+          >
+            <div className={styles.reorderControls}>
+              <button
+                className={styles.reorderBtn}
+                onClick={() => moveStep(steps, setSteps, idx, idx - 1)}
+                disabled={idx === 0}
+                aria-label="Move step up"
+              >
+                <ChevronUp size={14} />
+              </button>
+              <button
+                className={styles.reorderBtn}
+                onClick={() => moveStep(steps, setSteps, idx, idx + 1)}
+                disabled={idx === steps.length - 1}
+                aria-label="Move step down"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </div>
             <input
               className={styles.input}
               value={step.text}
@@ -224,7 +293,33 @@ export default function HabitForm() {
           placeholder="e.g. Wet towel wipe-down"
         />
         {altSteps.map((step, idx) => (
-          <div key={step.id} className={styles.stepRow}>
+          <div
+            key={step.id}
+            className={`${styles.stepRow} ${dragList === 'altSteps' && dragOverIdx === idx ? styles.stepRowDragOver : ''} ${dragList === 'altSteps' && dragIdx === idx ? styles.stepRowDragging : ''}`}
+            draggable
+            onDragStart={() => handleDragStart(idx, 'altSteps')}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={() => handleDrop(idx, altSteps, setAltSteps)}
+            onDragEnd={handleDragEnd}
+          >
+            <div className={styles.reorderControls}>
+              <button
+                className={styles.reorderBtn}
+                onClick={() => moveStep(altSteps, setAltSteps, idx, idx - 1)}
+                disabled={idx === 0}
+                aria-label="Move step up"
+              >
+                <ChevronUp size={14} />
+              </button>
+              <button
+                className={styles.reorderBtn}
+                onClick={() => moveStep(altSteps, setAltSteps, idx, idx + 1)}
+                disabled={idx === altSteps.length - 1}
+                aria-label="Move step down"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </div>
             <input
               className={styles.input}
               value={step.text}

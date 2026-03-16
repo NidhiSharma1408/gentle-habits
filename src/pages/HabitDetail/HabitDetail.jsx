@@ -11,6 +11,7 @@ import ProgressBar from '../../components/ui/ProgressBar/ProgressBar';
 import Toggle from '../../components/ui/Toggle/Toggle';
 import Button from '../../components/ui/Button/Button';
 import AIPromptModal from '../../components/habits/AIPromptModal/AIPromptModal';
+import VoiceCoach from '../../components/habits/VoiceCoach/VoiceCoach';
 import styles from './HabitDetail.module.css';
 
 const AFFIRMATIONS = [
@@ -178,6 +179,13 @@ export default function HabitDetail() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <VoiceCoach
+        steps={activeSteps ?? []}
+        completedSteps={habitProgress.completedSteps}
+        onToggle={toggleStep}
+        isComplete={isComplete}
+      />
 
       <AIPromptModal
         isOpen={showAIModal}

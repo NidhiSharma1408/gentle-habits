@@ -26,6 +26,8 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
   const [currentStepIdx, setCurrentStepIdx] = useState(null);
   const recognitionRef = useRef(null);
   const activeRef = useRef(false);
+  const gotResultRef = useRef(false);
+  const currentStepIdxRef = useRef(null);
 
   // Find next incomplete step
   const getNextIncompleteIdx = useCallback((fromIdx = -1) => {
@@ -36,11 +38,128 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
     return null;
   }, [steps, completedSteps]);
 
+  const stopRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch {}
+      recognitionRef.current = null;
+    }
+  }, []);
+
+  const startListening = useCallback((stepIdx) => {
+    if (!activeRef.current) return;
+
+    // Clean up any existing recognition
+    stopRecognition();
+
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 3;
+
+    recognitionRef.current = recognition;
+    gotResultRef.current = false;
+    currentStepIdxRef.current = stepIdx;
+    setIsListening(true);
+
+    recognition.onresult = (event) => {
+      // Check the latest result
+      const lastResult = event.results[event.results.length - 1];
+      if (!lastResult.isFinal) return;
+
+      gotResultRef.current = true;
+      const transcript = lastResult[0].transcript.toLowerCase().trim();
+
+      if (!activeRef.current) return;
+
+      // Stop recognition before processing to avoid overlaps
+      stopRecognition();
+      setIsListening(false);
+
+      handleTranscript(transcript, stepIdx);
+    };
+
+    recognition.onerror = (event) => {
+      // no-speech and aborted are normal — just restart
+      if (event.error === 'no-speech' || event.error === 'aborted') {
+        return; // onend will handle restart
+      }
+      // For other errors, log and restart
+      console.warn('Speech recognition error:', event.error);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      // If we didn't get a result and we're still active, restart listening
+      if (activeRef.current && !gotResultRef.current) {
+        setTimeout(() => {
+          if (activeRef.current) {
+            startListening(currentStepIdxRef.current);
+          }
+        }, 100);
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      console.warn('Failed to start recognition:', e);
+      // Retry after a short delay
+      setTimeout(() => {
+        if (activeRef.current) startListening(stepIdx);
+      }, 500);
+    }
+  }, [stopRecognition]);
+
+  const handleTranscript = useCallback(async (transcript, stepIdx) => {
+    if (!activeRef.current) return;
+
+    if (DONE_PHRASES.some((p) => transcript.includes(p))) {
+      onToggle(steps[stepIdx].id);
+      await speak('Done! Nice work.');
+
+      if (!activeRef.current) return;
+
+      const nextIdx = getNextIncompleteIdx(stepIdx);
+      if (nextIdx !== null) {
+        speakAndListen(nextIdx);
+      } else {
+        await speak('All steps complete. You did it! Amazing work today.');
+        stop();
+      }
+    } else if (SKIP_PHRASES.some((p) => transcript.includes(p))) {
+      await speak('Skipping this step.');
+      if (!activeRef.current) return;
+      const nextIdx = getNextIncompleteIdx(stepIdx);
+      if (nextIdx !== null) {
+        speakAndListen(nextIdx);
+      } else {
+        await speak('No more steps to skip.');
+        stop();
+      }
+    } else if (STOP_PHRASES.some((p) => transcript.includes(p))) {
+      await speak('Voice coach paused. Tap the mic to resume.');
+      stop();
+    } else {
+      // Didn't understand — just keep listening, don't interrupt
+      if (activeRef.current) {
+        startListening(stepIdx);
+      }
+    }
+  }, [steps, onToggle, getNextIncompleteIdx, startListening]);
+
   // Speak a step and then listen for response
   const speakAndListen = useCallback(async (stepIdx) => {
     if (!activeRef.current || !steps?.[stepIdx]) return;
 
+    stopRecognition();
     setCurrentStepIdx(stepIdx);
+    currentStepIdxRef.current = stepIdx;
     setIsSpeaking(true);
 
     const stepNum = stepIdx + 1;
@@ -51,88 +170,19 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
 
     if (!activeRef.current) return;
 
-    // Start listening
     startListening(stepIdx);
-  }, [steps]);
+  }, [steps, stopRecognition, startListening]);
 
-  const startListening = useCallback((stepIdx) => {
-    if (!activeRef.current) return;
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognitionRef.current = recognition;
-    setIsListening(true);
-
-    recognition.onresult = async (event) => {
-      const transcript = event.results[0][0].transcript.toLowerCase().trim();
-      setIsListening(false);
-
-      if (!activeRef.current) return;
-
-      // Check if user said "done"
-      if (DONE_PHRASES.some((p) => transcript.includes(p))) {
-        // Mark step complete
-        onToggle(steps[stepIdx].id);
-        await speak('Done! Nice work.');
-
-        if (!activeRef.current) return;
-
-        // Move to next step
-        const nextIdx = getNextIncompleteIdx(stepIdx);
-        if (nextIdx !== null) {
-          speakAndListen(nextIdx);
-        } else {
-          await speak('All steps complete. You did it! Amazing work today.');
-          stop();
-        }
-      } else if (SKIP_PHRASES.some((p) => transcript.includes(p))) {
-        await speak('Skipping this step.');
-        if (!activeRef.current) return;
-        const nextIdx = getNextIncompleteIdx(stepIdx);
-        if (nextIdx !== null) {
-          speakAndListen(nextIdx);
-        } else {
-          await speak('No more steps. You can say done to complete the remaining ones.');
-          stop();
-        }
-      } else if (STOP_PHRASES.some((p) => transcript.includes(p))) {
-        await speak('Voice coach paused. Tap the mic to resume.');
-        stop();
-      } else {
-        // Didn't understand — re-read and listen again
-        if (!activeRef.current) return;
-        await speak('Say done when you finish this step, or skip to move on.');
-        if (activeRef.current) startListening(stepIdx);
-      }
-    };
-
-    recognition.onerror = (event) => {
-      setIsListening(false);
-      if (!activeRef.current) return;
-      // On timeout/no-speech, just restart listening
-      if (event.error === 'no-speech' || event.error === 'aborted') {
-        if (activeRef.current) startListening(stepIdx);
-      }
-    };
-
-    recognition.onend = () => {
-      // If still active but onresult didn't fire, restart
-      setIsListening(false);
-    };
-
-    try {
-      recognition.start();
-    } catch {
-      // Already started or not supported
-    }
-  }, [steps, onToggle, getNextIncompleteIdx, speakAndListen]);
+  const stop = useCallback(() => {
+    activeRef.current = false;
+    setIsActive(false);
+    setIsListening(false);
+    setIsSpeaking(false);
+    setCurrentStepIdx(null);
+    currentStepIdxRef.current = null;
+    stopSpeaking();
+    stopRecognition();
+  }, [stopRecognition]);
 
   const start = useCallback(async () => {
     if (isComplete) return;
@@ -151,20 +201,7 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
     if (activeRef.current) {
       speakAndListen(firstIdx);
     }
-  }, [isComplete, getNextIncompleteIdx, speakAndListen]);
-
-  const stop = useCallback(() => {
-    activeRef.current = false;
-    setIsActive(false);
-    setIsListening(false);
-    setIsSpeaking(false);
-    setCurrentStepIdx(null);
-    stopSpeaking();
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
-      recognitionRef.current = null;
-    }
-  }, []);
+  }, [isComplete, getNextIncompleteIdx, speakAndListen, stop]);
 
   const toggle = useCallback(() => {
     if (isActive) {
@@ -179,11 +216,9 @@ export function useVoiceCoach({ steps, completedSteps, onToggle, isComplete }) {
     return () => {
       activeRef.current = false;
       stopSpeaking();
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
-      }
+      stopRecognition();
     };
-  }, []);
+  }, [stopRecognition]);
 
   // Stop if habit completes externally
   useEffect(() => {
